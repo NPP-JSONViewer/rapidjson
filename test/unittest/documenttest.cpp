@@ -728,6 +728,28 @@ TEST(Document, RawNumberRoundtrip_PrettyWriter) {
     EXPECT_TRUE(strstr(s, ": \"42\"") == NULL);
 }
 
+TEST(Document, RawNumberRoundtrip_Precision) {
+    // Numbers that would lose precision if converted to double
+    const char* json = "{\"big\":12345678901234567890,\"pi\":3.141592653589793238,\"tiny\":0.00000000000001}";
+
+    Document d;
+    d.Parse<kParseNumbersAsStringsFlag>(json);
+    EXPECT_FALSE(d.HasParseError());
+
+    // Verify stored as strings internally
+    EXPECT_TRUE(d["big"].IsString());
+    EXPECT_STREQ("12345678901234567890", d["big"].GetString());
+    EXPECT_STREQ("3.141592653589793238", d["pi"].GetString());
+    EXPECT_STREQ("0.00000000000001", d["tiny"].GetString());
+
+    // Roundtrip must preserve exact text
+    StringBuffer buffer;
+    Writer<StringBuffer> writer(buffer);
+    d.Accept(writer);
+
+    EXPECT_STREQ("{\"big\":12345678901234567890,\"pi\":3.141592653589793238,\"tiny\":0.00000000000001}", buffer.GetString());
+}
+
 #ifdef __clang__
 RAPIDJSON_DIAG_POP
 #endif
