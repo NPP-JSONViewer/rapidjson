@@ -15,6 +15,7 @@
 #include "unittest.h"
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
+#include "rapidjson/prettywriter.h"
 #include "rapidjson/filereadstream.h"
 #include "rapidjson/encodedstream.h"
 #include "rapidjson/stringbuffer.h"
@@ -668,6 +669,64 @@ TYPED_TEST(DocumentMove, MoveAssignmentStack) {
 //  Document d2;
 //  d1 = d2;
 //}
+
+TEST(Document, RawNumberRoundtrip) {
+    // Parse with kParseNumbersAsStringsFlag, then serialize back
+    // Numbers should survive the DOM roundtrip without gaining quotes
+    const char* json = "{\"age\":27,\"pi\":3.14159,\"name\":\"test\"}";
+
+    Document d;
+    d.Parse<kParseNumbersAsStringsFlag>(json);
+    EXPECT_FALSE(d.HasParseError());
+
+    // Verify values are stored as strings internally
+    EXPECT_TRUE(d["age"].IsString());
+    EXPECT_STREQ("27", d["age"].GetString());
+    EXPECT_TRUE(d["pi"].IsString());
+    EXPECT_STREQ("3.14159", d["pi"].GetString());
+    EXPECT_TRUE(d["name"].IsString());
+    EXPECT_STREQ("test", d["name"].GetString());
+
+    // Serialize back via Writer
+    StringBuffer buffer;
+    Writer<StringBuffer> writer(buffer);
+    d.Accept(writer);
+
+    // Numbers should NOT be quoted, but actual strings should be
+    EXPECT_STREQ("{\"age\":27,\"pi\":3.14159,\"name\":\"test\"}", buffer.GetString());
+}
+
+TEST(Document, RawNumberRoundtrip_Array) {
+    const char* json = "[1, 2.5, \"hello\", 100]";
+
+    Document d;
+    d.Parse<kParseNumbersAsStringsFlag>(json);
+    EXPECT_FALSE(d.HasParseError());
+
+    StringBuffer buffer;
+    Writer<StringBuffer> writer(buffer);
+    d.Accept(writer);
+
+    EXPECT_STREQ("[1,2.5,\"hello\",100]", buffer.GetString());
+}
+
+TEST(Document, RawNumberRoundtrip_PrettyWriter) {
+    const char* json = "{\"value\":42}";
+
+    Document d;
+    d.Parse<kParseNumbersAsStringsFlag>(json);
+    EXPECT_FALSE(d.HasParseError());
+
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(buffer);
+    d.Accept(writer);
+
+    // Should contain unquoted 42
+    const char* s = buffer.GetString();
+    EXPECT_TRUE(strstr(s, ": 42") != NULL);
+    // Should NOT contain "42"
+    EXPECT_TRUE(strstr(s, ": \"42\"") == NULL);
+}
 
 #ifdef __clang__
 RAPIDJSON_DIAG_POP
