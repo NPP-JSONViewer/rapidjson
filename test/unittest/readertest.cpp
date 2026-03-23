@@ -20,6 +20,8 @@
 #include "rapidjson/memorystream.h"
 
 #include <limits>
+#include <string>
+#include <vector>
 
 using namespace rapidjson;
 
@@ -2387,6 +2389,185 @@ TEST(Reader, EscapedApostrophe) {
         EXPECT_EQ(kParseErrorNone, r.Code());
         EXPECT_EQ(0u, r.Offset());
     }
+}
+
+// ---------------------------------------------------------------------------
+// kParseRawStringsFlag tests
+// ---------------------------------------------------------------------------
+
+// Handler that captures raw string/key content for verification
+struct RawStringsHandler {
+    bool Null() { return true; }
+    bool Bool(bool) { return true; }
+    bool Int(int) { return true; }
+    bool Uint(unsigned) { return true; }
+    bool Int64(int64_t) { return true; }
+    bool Uint64(uint64_t) { return true; }
+    bool Double(double) { return true; }
+    bool RawNumber(const char*, SizeType, bool) { return true; }
+    bool String(const char*, SizeType, bool) { ADD_FAILURE() << "String() called instead of RawString()"; return true; }
+    // 'str' is not null-terminated
+    bool RawString(const char* str, SizeType length, bool) {
+        EXPECT_TRUE(str != 0);
+        rawStrings.emplace_back(str, length);
+        return true;
+    }
+    bool StartObject() { return true; }
+    bool Key(const char*, SizeType, bool) { ADD_FAILURE() << "Key() called instead of RawKey()"; return true; }
+    // 'str' is not null-terminated
+    bool RawKey(const char* str, SizeType length, bool) {
+        EXPECT_TRUE(str != 0);
+        rawKeys.emplace_back(str, length);
+        return true;
+    }
+    bool EndObject(SizeType) { return true; }
+    bool StartArray() { return true; }
+    bool EndArray(SizeType) { return true; }
+
+    std::vector<std::string> rawStrings;
+    std::vector<std::string> rawKeys;
+};
+
+TEST(Reader, RawStrings_UnicodeEscape) {
+    const char* json = R"({"key":"\u003Cscript\u003E"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawKeys.size());
+    EXPECT_EQ("key", h.rawKeys[0]);
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("\\u003Cscript\\u003E", h.rawStrings[0]);
+}
+
+TEST(Reader, RawStrings_EscapedForwardSlash) {
+    const char* json = R"({"date":"\/Date(123)\/"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("\\/Date(123)\\/", h.rawStrings[0]);
+}
+
+TEST(Reader, RawStrings_StandardEscapes) {
+    const char* json = R"({"text":"line1\nline2\ttab\\back\"quote"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("line1\\nline2\\ttab\\\\back\\\"quote", h.rawStrings[0]);
+}
+
+TEST(Reader, RawStrings_SurrogatePair) {
+    const char* json = R"({"emoji":"\ud83d\ude00"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("\\ud83d\\ude00", h.rawStrings[0]);
+}
+
+TEST(Reader, RawStrings_PlainAscii) {
+    const char* json = R"({"name":"John"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawKeys.size());
+    EXPECT_EQ("name", h.rawKeys[0]);
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("John", h.rawStrings[0]);
+}
+
+TEST(Reader, RawStrings_EmptyString) {
+    const char* json = R"({"key":""})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("", h.rawStrings[0]);
+}
+
+TEST(Reader, RawStrings_MultipleValues) {
+    const char* json = R"({"a":"\u0041","b":"plain","c":"\/slash\/"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(3u, h.rawKeys.size());
+    EXPECT_EQ("a", h.rawKeys[0]);
+    EXPECT_EQ("b", h.rawKeys[1]);
+    EXPECT_EQ("c", h.rawKeys[2]);
+    ASSERT_EQ(3u, h.rawStrings.size());
+    EXPECT_EQ("\\u0041", h.rawStrings[0]);
+    EXPECT_EQ("plain", h.rawStrings[1]);
+    EXPECT_EQ("\\/slash\\/", h.rawStrings[2]);
+}
+
+TEST(Reader, RawStrings_Array) {
+    const char* json = R"(["\u003Ca\u003E","normal"])";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(2u, h.rawStrings.size());
+    EXPECT_EQ("\\u003Ca\\u003E", h.rawStrings[0]);
+    EXPECT_EQ("normal", h.rawStrings[1]);
+}
+
+TEST(Reader, RawStrings_KeysWithEscapes) {
+    const char* json = R"({"\u006B\u0065\u0079":"value"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawKeys.size());
+    EXPECT_EQ("\\u006B\\u0065\\u0079", h.rawKeys[0]);
+}
+
+TEST(Reader, RawStrings_ValidationStillWorks) {
+    // Invalid escape \x - must still fail
+    {
+        const char* json = R"({"key":"\x00"})";
+        StringStream s(json);
+        RawStringsHandler h;
+        Reader reader;
+        EXPECT_FALSE(reader.Parse<kParseRawStringsFlag>(s, h));
+        EXPECT_EQ(kParseErrorStringEscapeInvalid, reader.GetParseErrorCode());
+    }
+    // Lone high surrogate - must still fail
+    {
+        const char* json = R"({"key":"\ud800"})";
+        StringStream s(json);
+        RawStringsHandler h;
+        Reader reader;
+        EXPECT_FALSE(reader.Parse<kParseRawStringsFlag>(s, h));
+        EXPECT_EQ(kParseErrorStringUnicodeSurrogateInvalid, reader.GetParseErrorCode());
+    }
+    // Unterminated string - must still fail
+    {
+        const char* json = R"({"key":"unterminated)";
+        StringStream s(json);
+        RawStringsHandler h;
+        Reader reader;
+        EXPECT_FALSE(reader.Parse<kParseRawStringsFlag>(s, h));
+        EXPECT_EQ(kParseErrorStringMissQuotationMark, reader.GetParseErrorCode());
+    }
+}
+
+TEST(Reader, RawStrings_CombinedWithOtherFlags) {
+    // kParseRawStringsFlag combined with kParseNumbersAsStringsFlag
+    const char* json = R"({"num":42,"str":"\u0041"})";
+    StringStream s(json);
+    RawStringsHandler h;
+    Reader reader;
+    EXPECT_TRUE(reader.Parse<kParseRawStringsFlag | kParseNumbersAsStringsFlag>(s, h));
+    ASSERT_EQ(1u, h.rawStrings.size());
+    EXPECT_EQ("\\u0041", h.rawStrings[0]);
 }
 
 RAPIDJSON_DIAG_POP
