@@ -2530,7 +2530,7 @@ TEST(Reader, RawStrings_KeysWithEscapes) {
 }
 
 TEST(Reader, RawStrings_ValidationStillWorks) {
-    // Invalid escape \x — must still fail
+    // Invalid escape \x - must still fail
     {
         const char* json = R"({"key":"\x00"})";
         StringStream s(json);
@@ -2539,7 +2539,7 @@ TEST(Reader, RawStrings_ValidationStillWorks) {
         EXPECT_FALSE(reader.Parse<kParseRawStringsFlag>(s, h));
         EXPECT_EQ(kParseErrorStringEscapeInvalid, reader.GetParseErrorCode());
     }
-    // Lone high surrogate — must still fail
+    // Lone high surrogate - must still fail
     {
         const char* json = R"({"key":"\ud800"})";
         StringStream s(json);
@@ -2548,7 +2548,7 @@ TEST(Reader, RawStrings_ValidationStillWorks) {
         EXPECT_FALSE(reader.Parse<kParseRawStringsFlag>(s, h));
         EXPECT_EQ(kParseErrorStringUnicodeSurrogateInvalid, reader.GetParseErrorCode());
     }
-    // Unterminated string — must still fail
+    // Unterminated string - must still fail
     {
         const char* json = R"({"key":"unterminated)";
         StringStream s(json);

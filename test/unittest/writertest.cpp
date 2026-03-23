@@ -696,7 +696,7 @@ TEST(Writer, RawString_EmptyString) {
 }
 
 TEST(Writer, RawString_RoundTrip) {
-    // Parse with kParseRawStringsFlag, write back — output should match input
+    // Parse with kParseRawStringsFlag, write back - output should match input
     const char* json = R"({"a":"\u003Cb\u003E","c":"\/path\/"})";
     StringBuffer sb;
     Writer<StringBuffer> writer(sb);
