@@ -41,9 +41,9 @@ enum PrettyFormatOptions {
 /*! \see PrettyWriter::SetLineEnding
  */
 enum LineEndingOption {
-  kLf = 0, // default line ending \n
-  kCrLf = 1, // \r\n for windows
-  kCr = 2 // \r for Mac
+    kLineEndingLf = 0,      //!< Default line ending \n.
+    kLineEndingCrLf = 1,    //!< \r\n for Windows.
+    kLineEndingCr = 2       //!< \r (legacy Mac OS).
 };
 
 //! Writer with indentation and spacing.
@@ -65,15 +65,15 @@ public:
         \param levelDepth Initial capacity of stack.
     */
     explicit PrettyWriter(OutputStream& os, StackAllocator* allocator = 0, size_t levelDepth = Base::kDefaultLevelDepth) : 
-        Base(os, allocator, levelDepth), indentChar_(' '), indentCharCount_(4), formatOptions_(kFormatDefault) {}
+        Base(os, allocator, levelDepth), indentChar_(' '), indentCharCount_(4), formatOptions_(kFormatDefault), lineEndingOption_(kLineEndingLf) {}
 
 
     explicit PrettyWriter(StackAllocator* allocator = 0, size_t levelDepth = Base::kDefaultLevelDepth) : 
-        Base(allocator, levelDepth), indentChar_(' '), indentCharCount_(4), formatOptions_(kFormatDefault) {}
+        Base(allocator, levelDepth), indentChar_(' '), indentCharCount_(4), formatOptions_(kFormatDefault), lineEndingOption_(kLineEndingLf) {}
 
 #if RAPIDJSON_HAS_CXX11_RVALUE_REFS
     PrettyWriter(PrettyWriter&& rhs) :
-        Base(std::forward<PrettyWriter>(rhs)), indentChar_(rhs.indentChar_), indentCharCount_(rhs.indentCharCount_), formatOptions_(rhs.formatOptions_) {}
+        Base(std::forward<PrettyWriter>(rhs)), indentChar_(rhs.indentChar_), indentCharCount_(rhs.indentCharCount_), formatOptions_(rhs.formatOptions_), lineEndingOption_(rhs.lineEndingOption_) {}
 #endif
 
     //! Set custom indentation.
@@ -273,13 +273,14 @@ protected:
 
     void WriteLineEnding() {
         switch (lineEndingOption_) {
-        case kCrLf:
+        case kLineEndingCrLf:
             Base::os_->Put('\r');
             Base::os_->Put('\n');
             break;
-        case kCr:
+        case kLineEndingCr:
             Base::os_->Put('\r');
             break;
+        case kLineEndingLf:
         default:
             Base::os_->Put('\n');
             break;
@@ -289,7 +290,7 @@ protected:
     Ch indentChar_;
     unsigned indentCharCount_;
     PrettyFormatOptions formatOptions_;
-    LineEndingOption lineEndingOption_ = kLf;
+    LineEndingOption lineEndingOption_;
 
 private:
     // Prohibit copy constructor & assignment operator.
