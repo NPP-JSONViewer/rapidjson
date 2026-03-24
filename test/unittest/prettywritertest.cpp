@@ -387,6 +387,105 @@ TEST(PrettyWriter, RawNumber_NoQuotes) {
     EXPECT_TRUE(strstr(s, ": \"test\"") != NULL);
 }
 
+TEST(PrettyWriter, SetLineEnding_Lf) {
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(buffer);
+    writer.SetLineEnding(kLineEndingLf);
+    writer.StartObject();
+    writer.Key("a");
+    writer.Int(1);
+    writer.EndObject();
+    EXPECT_STREQ(
+        "{\n"
+        "    \"a\": 1\n"
+        "}",
+        buffer.GetString());
+}
+
+TEST(PrettyWriter, SetLineEnding_CrLf) {
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(buffer);
+    writer.SetLineEnding(kLineEndingCrLf);
+    writer.StartObject();
+    writer.Key("a");
+    writer.Int(1);
+    writer.EndObject();
+    EXPECT_STREQ(
+        "{\r\n"
+        "    \"a\": 1\r\n"
+        "}",
+        buffer.GetString());
+}
+
+TEST(PrettyWriter, SetLineEnding_Cr) {
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(buffer);
+    writer.SetLineEnding(kLineEndingCr);
+    writer.StartObject();
+    writer.Key("a");
+    writer.Int(1);
+    writer.EndObject();
+    EXPECT_STREQ(
+        "{\r"
+        "    \"a\": 1\r"
+        "}",
+        buffer.GetString());
+}
+
+TEST(PrettyWriter, SetLineEnding_CrLf_Array) {
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(buffer);
+    writer.SetLineEnding(kLineEndingCrLf);
+    writer.StartArray();
+    writer.Int(1);
+    writer.Int(2);
+    writer.EndArray();
+    EXPECT_STREQ(
+        "[\r\n"
+        "    1,\r\n"
+        "    2\r\n"
+        "]",
+        buffer.GetString());
+}
+
+TEST(PrettyWriter, SetLineEnding_Default_IsLf) {
+    // Default (no SetLineEnding call) should produce LF
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(buffer);
+    writer.StartObject();
+    writer.Key("x");
+    writer.Bool(true);
+    writer.EndObject();
+    EXPECT_STREQ(
+        "{\n"
+        "    \"x\": true\n"
+        "}",
+        buffer.GetString());
+}
+
+#if RAPIDJSON_HAS_CXX11_RVALUE_REFS
+static PrettyWriter<StringBuffer> CrLfWriterGen(StringBuffer &target) {
+    PrettyWriter<StringBuffer> writer(target);
+    writer.SetLineEnding(kLineEndingCrLf);
+    writer.StartObject();
+    writer.Key("a");
+    writer.Int(1);
+    return writer;
+}
+
+TEST(PrettyWriter, MoveCtor_PreservesLineEnding) {
+    StringBuffer buffer;
+    PrettyWriter<StringBuffer> writer(CrLfWriterGen(buffer));
+    writer.EndObject();
+    EXPECT_TRUE(writer.IsComplete());
+    EXPECT_STREQ(
+        "{\r\n"
+        "    \"a\": 1\r\n"
+        "}",
+        buffer.GetString());
+}
+#endif
+
 #ifdef __clang__
 RAPIDJSON_DIAG_POP
 #endif
